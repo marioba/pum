@@ -1,0 +1,43 @@
+name: Docker test and build
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    name: Testing on Linux
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-bionic] # bionic has Python 3.6, we might want to test also on 3.5
+        pg_major: [9.6,10,11,12]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Install PostgreSQL
+      - run: |
+          apt-get install curl ca-certificates gnupg
+          curl https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add -
+          sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          apt-get update
+          apt-get install postgresql-${{ matrix.pg_major }}
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Install pum
+        run: python -m pip install .
+
+      - name: Setup db
+        shell: bash
+        run: ./.ci/setup_db.sh
+
+      - name: Run base tests
+        run: nose2 -v
+
+      - name: Run migrations tests
+        shell: bash
+        run: ./test/test_pum.sh
